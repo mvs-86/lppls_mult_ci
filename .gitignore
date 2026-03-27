@@ -1,0 +1,26 @@
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+renv/
+
+# Data (large / proprietary — user-supplied)
+data/
+*.csv
+*.xlsx
+*.xls
+
+# Output (generated)
+output/
+cache/
+
+# PDF (paper)
+*.pdf
+
+# Claude local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
