@@ -57,14 +57,25 @@ plot_ci_asset <- function(ci_dt,
       stop("plot_ci_asset: lnp_series and dates_lnp must have the same length")
   }
 
+  # ---- Pre-compute lnp scaling for secondary axis ----
+  if (!is.null(lnp_series)) {
+    lnp_dt    <- data.table(date = as.Date(dates_lnp), lnp = lnp_series)
+    lnp_min   <- min(lnp_series, na.rm = TRUE)
+    lnp_max   <- max(lnp_series, na.rm = TRUE)
+    lnp_range <- lnp_max - lnp_min
+    scale_lnp   <- function(x) -1 + 2 * (x - lnp_min) / lnp_range
+    unscale_lnp <- function(x) lnp_min + (x + 1) / 2 * lnp_range
+    y_label_sec <- if (!is.null(asset_name)) "Log P/D ratio" else "Log price"
+  }
+
   scale_map <- .detect_scales(ci_dt)   # named label vector
   n_scales  <- length(scale_map)
 
   # ---- Build one ggplot per scale ----
   ci_panels <- lapply(seq_len(n_scales), function(i) {
-    s     <- names(scale_map)[i]
-    label <- scale_map[[i]]
-    is_bottom <- (i == n_scales) && is.null(lnp_series)
+    s         <- names(scale_map)[i]
+    label     <- scale_map[[i]]
+    is_bottom <- (i == n_scales)
 
     # Melt pos and neg to long; negate neg so it plots below zero
     wide <- ci_dt[, .(date,
@@ -79,7 +90,21 @@ plot_ci_asset <- function(ci_dt,
     long[, signal := factor(signal,
                             levels = c("Positive bubble", "Negative bubble"))]
 
-    ggplot(long, aes(x = date, y = value, fill = signal)) +
+    y_scale <- if (!is.null(lnp_series)) {
+      scale_y_continuous(
+        limits   = c(-1, 1),
+        breaks   = c(-1, -0.5, 0, 0.5, 1),
+        labels   = c("-1", "-0.5", "0", "0.5", "1"),
+        sec.axis = sec_axis(~ unscale_lnp(.),
+                            name = if (i == 1L) y_label_sec else NULL)
+      )
+    } else {
+      scale_y_continuous(limits = c(-1, 1),
+                         breaks = c(-1, -0.5, 0, 0.5, 1),
+                         labels = c("-1", "-0.5", "0", "0.5", "1"))
+    }
+
+    p <- ggplot(long, aes(x = date, y = value, fill = signal)) +
       geom_area(position = "identity", alpha = 0.75) +
       geom_hline(yintercept = 0, linewidth = 0.35, colour = "black") +
       scale_fill_manual(
@@ -87,9 +112,7 @@ plot_ci_asset <- function(ci_dt,
                    "Negative bubble" = "#1f77b4"),
         name   = NULL
       ) +
-      scale_y_continuous(limits = c(-1, 1),
-                         breaks = c(-1, -0.5, 0, 0.5, 1),
-                         labels = c("-1", "-0.5", "0", "0.5", "1")) +
+      y_scale +
       scale_x_date(date_labels = "%Y") +
       labs(title = label, x = NULL, y = "CI") +
       theme_bw(base_size = 10) +
@@ -101,36 +124,22 @@ plot_ci_asset <- function(ci_dt,
         panel.grid.minor  = element_blank(),
         plot.title        = element_text(size = 9, face = "bold")
       )
+
+    if (!is.null(lnp_series)) {
+      p <- p + geom_line(
+        data        = lnp_dt,
+        aes(x = date, y = scale_lnp(lnp)),
+        inherit.aes = FALSE,
+        colour      = "black",
+        linewidth   = 0.45
+      )
+    }
+
+    p
   })
 
-  # ---- Optional top panel: log price / P/D ratio ----
-  if (!is.null(lnp_series)) {
-    lnp_dt  <- data.table(date = as.Date(dates_lnp), lnp = lnp_series)
-    y_label <- if (!is.null(asset_name)) "Log P/D ratio" else "Log price"
-
-    p_top <- ggplot(lnp_dt, aes(x = date, y = lnp)) +
-      geom_line(colour = "black", linewidth = 0.45) +
-      scale_x_date(date_labels = "%Y") +
-      labs(x = NULL, y = y_label) +
-      theme_bw(base_size = 10) +
-      theme(
-        axis.text.x      = element_blank(),
-        axis.ticks.x     = element_blank(),
-        panel.grid.minor = element_blank()
-      )
-
-    # Mark x-axis on the bottom CI panel
-    ci_panels[[n_scales]] <- ci_panels[[n_scales]] +
-      theme(axis.text.x  = element_text(),
-            axis.ticks.x = element_line())
-
-    combined <- (p_top / Reduce(`/`, ci_panels)) +
-      plot_layout(heights = c(1.5, rep(1, n_scales)))
-
-  } else {
-    combined <- Reduce(`/`, ci_panels) +
-      plot_layout(heights = rep(1, n_scales))
-  }
+  combined <- Reduce(`/`, ci_panels) +
+    plot_layout(heights = rep(1, n_scales))
 
   # ---- Overall title ----
   if (!is.null(asset_name)) {
