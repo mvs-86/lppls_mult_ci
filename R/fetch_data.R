@@ -204,3 +204,45 @@ fetch_all_data <- function(countries  = names(COUNTRY_ETFS),
 
   invisible(list(gold = gold, pd = pd_list))
 }
+
+# ---------------------------------------------------------------------------
+# fetch_asset_yahoo: Download adjusted close price for any Yahoo Finance ticker
+# ---------------------------------------------------------------------------
+# name       : string used as file stem and asset label (e.g. "btc", "gold")
+# ticker     : Yahoo Finance ticker (e.g. "BTC-USD", "GLD", "CL=F")
+# output_dir : directory; file saved as {output_dir}/{name}.csv
+# start_date, end_date : character "YYYY-MM-DD"
+#
+# Saves: columns date, price, log_price
+# Returns data.table invisibly, or NULL on failure.
+fetch_asset_yahoo <- function(name, ticker,
+                               output_dir = "data/assets",
+                               start_date = "2015-01-01",
+                               end_date   = format(Sys.Date())) {
+  message(sprintf("Fetching %s (%s) from Yahoo Finance...", name, ticker))
+
+  prices <- tryCatch(
+    getSymbols(ticker, src = "yahoo",
+               from = start_date, to = end_date,
+               auto.assign = FALSE, warnings = FALSE),
+    error = function(e) {
+      warning(sprintf("  Could not download %s: %s", ticker, conditionMessage(e)))
+      NULL
+    }
+  )
+  if (is.null(prices)) return(invisible(NULL))
+
+  dt <- data.table(
+    date  = as.Date(index(prices)),
+    price = as.numeric(Ad(prices))
+  )
+  dt <- dt[is.finite(price) & price > 0]
+  dt[, log_price := log(price)]
+
+  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+  out_path <- file.path(output_dir, paste0(name, ".csv"))
+  fwrite(dt, out_path)
+  message(sprintf("  Saved %d rows to %s", nrow(dt), out_path))
+
+  invisible(dt)
+}
