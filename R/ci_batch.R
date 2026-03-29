@@ -168,8 +168,10 @@ ci_batch_status <- function(cache_dir) {
   out <- data.table(date = dates[t2_indices])
   for (sc_name in names(scales)) {
     ab <- scale_abbrev(sc_name)
-    out[, paste0("pos_", ab) := ci_list[[sc_name]]$ci_pos]
-    out[, paste0("neg_", ab) := ci_list[[sc_name]]$ci_neg]
+    out[, paste0("pos_",    ab) := ci_list[[sc_name]]$ci_pos]
+    out[, paste0("neg_",    ab) := ci_list[[sc_name]]$ci_neg]
+    out[, paste0("tc_pos_", ab) := .tc_to_dates(ci_list[[sc_name]]$tc_pos, dates)]
+    out[, paste0("tc_neg_", ab) := .tc_to_dates(ci_list[[sc_name]]$tc_neg, dates)]
   }
   setkey(out, date)
   out

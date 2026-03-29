@@ -63,18 +63,51 @@ lppls_filter <- function(fit, t1, t2) {
 }
 
 # ---------------------------------------------------------------------------
+# .tc_to_dates: Convert mean tc indices (into the full lnp_vec) to Dates
+# ---------------------------------------------------------------------------
+# tc_vec : numeric vector of mean tc index values (may exceed length(dates))
+# dates  : Date vector aligned to lnp_vec (index 1 = dates[1])
+#
+# Indices within [1, n] are looked up directly; values outside are
+# linearly extrapolated using the last date-step.
+.tc_to_dates <- function(tc_vec, dates) {
+  n <- length(dates)
+  if (n < 2L) return(rep(as.Date(NA), length(tc_vec)))
+  step <- as.numeric(dates[n] - dates[n - 1L])
+  idx  <- round(tc_vec)
+  as.Date(
+    ifelse(is.na(idx),
+      NA_real_,
+      ifelse(idx < 1L,
+        as.numeric(dates[1L]) + (idx - 1L) * step,
+        ifelse(idx > n,
+          as.numeric(dates[n]) + (idx - n) * step,
+          as.numeric(dates[pmax(1L, pmin(n, idx))])
+        )
+      )
+    ),
+    origin = "1970-01-01"
+  )
+}
+
+# ---------------------------------------------------------------------------
 # compute_ci_t2: Compute CI (pos and neg) for one t2 at a given scale
 # ---------------------------------------------------------------------------
 # lnp_daily  : full numeric vector of daily log P/D (index 1..N)
 # t2_idx     : integer, index in lnp_daily of the current week-end
 # dt_min, dt_max, step: window length range and iteration step
 #
-# Returns list(pos = fraction, neg = fraction)
+# Returns list(pos, neg, tc_pos, tc_neg):
+#   pos/neg    — fraction of qualified fits with B<0 (positive) / B>=0 (negative)
+#   tc_pos/neg — mean tc index (in lnp_daily units) of those qualified fits;
+#                NA when no qualified fits of that sign
 compute_ci_t2 <- function(lnp_daily, t2_idx, dt_min, dt_max, step,
                           n_starts = 3L, method = "grid") {
   n_qualified_pos <- 0L
   n_qualified_neg <- 0L
   n_total         <- 0L
+  tc_pos_vals     <- numeric(0)
+  tc_neg_vals     <- numeric(0)
 
   dt_seq <- seq(dt_min, dt_max, by = step)
 
@@ -99,21 +132,29 @@ compute_ci_t2 <- function(lnp_daily, t2_idx, dt_min, dt_max, step,
     n_total <- n_total + 1L
 
     if (lppls_filter(fit, t1_norm, t2_norm)) {
+      # Map normalized tc back to original index space:
+      #   tc_norm=1 → t1_idx,  tc_norm=t2_norm → t2_idx (approx)
+      tc_actual <- t1_idx + (fit$tc - 1L) * WINDOW_SAMPLE_STEP
+
       if (fit$B < 0) {
         n_qualified_pos <- n_qualified_pos + 1L
+        tc_pos_vals     <- c(tc_pos_vals, tc_actual)
       } else {
         n_qualified_neg <- n_qualified_neg + 1L
+        tc_neg_vals     <- c(tc_neg_vals, tc_actual)
       }
     }
   }
 
   if (n_total == 0L) {
-    return(list(pos = 0, neg = 0))
+    return(list(pos = 0, neg = 0, tc_pos = NA_real_, tc_neg = NA_real_))
   }
 
   list(
-    pos = n_qualified_pos / n_total,
-    neg = n_qualified_neg / n_total
+    pos    = n_qualified_pos / n_total,
+    neg    = n_qualified_neg / n_total,
+    tc_pos = if (length(tc_pos_vals) > 0L) mean(tc_pos_vals) else NA_real_,
+    tc_neg = if (length(tc_neg_vals) > 0L) mean(tc_neg_vals) else NA_real_
   )
 }
 
@@ -135,7 +176,8 @@ compute_ci_scale <- function(lnp_daily, t2_indices, scale_name,
   results <- lapply(t2_indices, function(t2_idx) {
     ci <- compute_ci_t2(lnp_daily, t2_idx, dt_min, dt_max, step,
                         n_starts = n_starts, method = method)
-    list(t2_idx = t2_idx, ci_pos = ci$pos, ci_neg = ci$neg)
+    list(t2_idx = t2_idx, ci_pos = ci$pos, ci_neg = ci$neg,
+         tc_pos = ci$tc_pos, tc_neg = ci$tc_neg)
   })
 
   rbindlist(results)
@@ -233,8 +275,10 @@ compute_ci_asset <- function(x, dates = NULL, value_col = NULL,
   out <- data.table(date = dates[t2_indices])
   for (sc_name in names(scales)) {
     ab <- scale_abbrev(sc_name)
-    out[, paste0("pos_", ab) := ci_list[[sc_name]]$ci_pos]
-    out[, paste0("neg_", ab) := ci_list[[sc_name]]$ci_neg]
+    out[, paste0("pos_",    ab) := ci_list[[sc_name]]$ci_pos]
+    out[, paste0("neg_",    ab) := ci_list[[sc_name]]$ci_neg]
+    out[, paste0("tc_pos_", ab) := .tc_to_dates(ci_list[[sc_name]]$tc_pos, dates)]
+    out[, paste0("tc_neg_", ab) := .tc_to_dates(ci_list[[sc_name]]$tc_neg, dates)]
   }
 
   setkey(out, date)
@@ -253,8 +297,9 @@ compute_ci_scale_custom <- function(lnp_vec, t2_indices, dt_min, dt_max, step,
                                     method = "grid") {
   worker <- function(t2_idx) {
     ci <- compute_ci_t2(lnp_vec, t2_idx, dt_min, dt_max, step,
-                        n_starts = n_starts)
-    list(t2_idx = t2_idx, ci_pos = ci$pos, ci_neg = ci$neg)
+                        n_starts = n_starts, method = method)
+    list(t2_idx = t2_idx, ci_pos = ci$pos, ci_neg = ci$neg,
+         tc_pos = ci$tc_pos, tc_neg = ci$tc_neg)
   }
 
   results <- if (parallel_t2) {
