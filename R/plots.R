@@ -128,7 +128,7 @@ plot_ci_asset <- function(ci_dt,
     if (!is.null(lnp_series)) {
       p <- p + geom_line(
         data        = lnp_dt,
-        aes(x = date, y = scale_lnp(lnp)),
+        aes(x = date, y = scale_lnp(lnp_series)),
         inherit.aes = FALSE,
         colour      = "black",
         linewidth   = 0.45

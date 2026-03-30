@@ -13,11 +13,18 @@
 # USER CONFIGURATION — edit this block to change assets / settings
 # =============================================================================
 
+start <- "2024-1-1"
+end <- "2026-03-28"
 ASSETS <- list(
-  btc  = list(ticker = "BTC-USD", start = "2015-01-01", end = "2024-12-31"),
-  eth  = list(ticker = "ETH-USD", start = "2017-01-01", end = "2024-12-31"),
-  gold = list(ticker = "GLD",     start = "2005-01-01", end = "2024-12-31"),
-  oil  = list(ticker = "USO",     start = "2006-01-01", end = "2024-12-31")
+  bova11  = list(ticker = "BOVA11.SA", start = start, end = end),
+  petr4  = list(ticker = "PETR4.SA", start = start, end = end),
+  vale3  = list(ticker = "VALE3.SA", start = start, end = end),
+  bbdc4  = list(ticker = "BBDC4.SA", start = start, end = end),
+  itsa4  = list(ticker = "ITSA4.SA", start = start, end = end),
+  ivvb11  = list(ticker = "IVVB11.SA", start = start, end = end),
+  small11  = list(ticker = "SMAL11.SA", start = start, end = end),
+  wege3  = list(ticker = "WEGE3.SA", start = start, end = end),
+  b3sa3  = list(ticker = "B3SA3.SA", start = start, end = end)
 )
 
 # Number of chunks per asset — increase for very long series (>1000 obs)
@@ -25,6 +32,7 @@ N_BATCHES <- 10L
 
 # Parallel workers for the inner t2 loop
 N_WORKERS <- min(4L, parallelly::availableCores() - 1L)
+N_WORKERS <- 12L
 
 # Set TRUE to recompute even if batch cache already exists
 OVERWRITE <- FALSE
@@ -37,6 +45,12 @@ OVERWRITE <- FALSE
 #     long   = list(dt_min = 200L, dt_max = 500L, step = 2L)
 #   )
 CUSTOM_SCALES <- NULL
+CUSTOM_SCALES <- list(
+  short  = list(dt_min = 20L,  dt_max = 60L,  step = 2L),
+  medium = list(dt_min = 60L,  dt_max = 120L, step = 2L),
+  long   = list(dt_min = 120L, dt_max = 250L, step = 2L)
+)
+
 
 # Output locations
 PRICE_DIR <- "data/assets"
