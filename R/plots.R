@@ -212,3 +212,81 @@ plot_gold_data <- function(gold_dt, vol_dt) {
       ))
     )
 }
+
+# ---------------------------------------------------------------------------
+# plot_ci_price: price bars coloured by CI bubble signal
+# ---------------------------------------------------------------------------
+# Displays price as a bar chart where fill encodes the dominant bubble signal:
+#   red  (light→dark) = positive bubble at increasing confidence
+#   blue (light→dark) = negative bubble at increasing confidence
+#   near-white        = no dominant signal
+#
+# signal = pos_{scale} − neg_{scale} ∈ [-1, 1] drives a diverging colour scale.
+#
+# ci_dt        : data.table from compute_ci_asset() — needs date + pos_*/neg_*
+# price_series : numeric vector — prices or log prices (y-axis bar height)
+# dates_price  : Date vector for price_series; NULL = assumed aligned to ci_dt$date
+# scale        : CI scale suffix to colour by (e.g. "short", "med"); NULL = first detected
+# asset_name   : plot title string
+#
+# Returns a ggplot object.
+plot_ci_price <- function(ci_dt,
+                           price_series,
+                           dates_price = NULL,
+                           scale       = NULL,
+                           asset_name  = NULL) {
+
+  if (!is.data.table(ci_dt) || !"date" %in% names(ci_dt))
+    stop("plot_ci_price: ci_dt must be a data.table with a 'date' column")
+  if (!is.numeric(price_series))
+    stop("plot_ci_price: price_series must be a numeric vector")
+  if (is.null(dates_price)) dates_price <- ci_dt$date
+  if (length(price_series) != length(dates_price))
+    stop("plot_ci_price: price_series and dates_price must have the same length")
+
+  # Detect / validate scale
+  scale_map <- .detect_scales(ci_dt)
+  s <- if (is.null(scale)) names(scale_map)[1L] else scale
+  if (!s %in% names(scale_map))
+    stop("plot_ci_price: scale '", s, "' not found — available: ",
+         paste(names(scale_map), collapse = ", "))
+
+  # Inner-join price and CI by date
+  price_dt <- data.table(date = as.Date(dates_price), price = as.numeric(price_series))
+  dt <- merge(
+    ci_dt[, .(date,
+               pos = get(paste0("pos_", s)),
+               neg = get(paste0("neg_", s)))],
+    price_dt,
+    by = "date"
+  )
+  dt[, signal := pos - neg]
+
+  # Bar width = median inter-date gap (works for daily, weekly, or custom freq)
+  bar_width <- if (nrow(dt) > 1L) as.numeric(median(diff(dt$date))) else 1
+
+  p <- ggplot(dt, aes(x = date, y = price, fill = signal)) +
+    geom_col(width = bar_width, colour = NA) +
+    scale_fill_gradient2(
+      low      = "#1f77b4",
+      mid      = "grey92",
+      high     = "#d62728",
+      midpoint = 0,
+      limits   = c(-1, 1),
+      name     = paste0("CI signal\n(", .scale_label(s), ")")
+    ) +
+    scale_x_date(date_labels = "%Y") +
+    labs(x = NULL, y = "Price") +
+    theme_bw(base_size = 10) +
+    theme(
+      legend.position   = "right",
+      legend.key.height = unit(1.5, "cm"),
+      panel.grid.minor  = element_blank()
+    )
+
+  if (!is.null(asset_name))
+    p <- p + labs(title = asset_name) +
+      theme(plot.title = element_text(face = "bold", size = 12, hjust = 0.5))
+
+  p
+}

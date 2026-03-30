@@ -54,4 +54,21 @@ tryCatch(
   error = function(e) cat("caught:", conditionMessage(e), "\n")
 )
 
+# --- plot_ci_price ---
+cat("Testing plot_ci_price (explicit scale)... ")
+p6 <- plot_ci_price(ci_dt, exp(lnp), dates_price = dates,
+                    scale = "short", asset_name = "BTC")
+ggplot2::ggsave("output/figures/smoke_ci_price_bars.pdf", p6, width = 10, height = 5)
+cat("OK\n")
+
+cat("Testing plot_ci_price (auto-scale)... ")
+p7 <- plot_ci_price(ci_dt, exp(lnp))
+cat("OK\n")
+
+cat("Testing plot_ci_price error on unknown scale... ")
+tryCatch(
+  plot_ci_price(ci_dt, exp(lnp), scale = "xxx"),
+  error = function(e) cat("caught:", conditionMessage(e), "\n")
+)
+
 cat("\nAll smoke tests passed.\n")
