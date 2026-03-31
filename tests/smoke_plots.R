@@ -71,4 +71,15 @@ tryCatch(
   error = function(e) cat("caught:", conditionMessage(e), "\n")
 )
 
+cat("Testing plot_ci_price_all... ")
+p10 <- plot_ci_price_all(ci_dt, exp(lnp), dates_price = dates,
+                          asset_name = "BTC (all scales)")
+ggplot2::ggsave("output/figures/smoke_ci_price_all.pdf",
+                p10, width = 10, height = 9)
+cat("OK\n")
+
+cat("Testing plot_ci_price_all no title... ")
+p11 <- plot_ci_price_all(ci_dt, exp(lnp))
+cat("OK\n")
+
 cat("\nAll smoke tests passed.\n")

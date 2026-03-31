@@ -290,3 +290,82 @@ plot_ci_price <- function(ci_dt,
 
   p
 }
+
+# ---------------------------------------------------------------------------
+# plot_ci_price_all: price bars coloured by CI bubble signal, all scales
+#
+# Stacks one price-bar panel per detected scale vertically (patchwork).
+# Each panel uses the same diverging colour scale as plot_ci_price.
+# Legend shown on bottom panel only; x-axis on bottom panel only.
+#
+# ci_dt        : data.table with date + pos_*/neg_* columns
+# price_series : numeric vector of prices (y-axis bar height)
+# dates_price  : Date vector aligned to price_series; NULL → ci_dt$date
+# asset_name   : optional overall title
+# ---------------------------------------------------------------------------
+plot_ci_price_all <- function(ci_dt,
+                               price_series,
+                               dates_price = NULL,
+                               asset_name  = NULL) {
+
+  if (!is.data.table(ci_dt) || !"date" %in% names(ci_dt))
+    stop("plot_ci_price_all: ci_dt must be a data.table with a 'date' column")
+  if (!is.numeric(price_series))
+    stop("plot_ci_price_all: price_series must be a numeric vector")
+  if (is.null(dates_price)) dates_price <- ci_dt$date
+  if (length(price_series) != length(dates_price))
+    stop("plot_ci_price_all: price_series and dates_price must have the same length")
+
+  scale_map <- .detect_scales(ci_dt)
+  scales    <- names(scale_map)
+  n_scales  <- length(scales)
+  price_dt  <- data.table(date = as.Date(dates_price), price = as.numeric(price_series))
+
+  dt_tmp    <- merge(ci_dt[, .(date)], price_dt, by = "date")
+  bar_width <- if (nrow(dt_tmp) > 1L) as.numeric(median(diff(dt_tmp$date))) else 1
+
+  panels <- lapply(seq_along(scales), function(i) {
+    s         <- scales[i]
+    is_bottom <- (i == n_scales)
+
+    dt <- merge(
+      ci_dt[, .(date, pos = get(paste0("pos_", s)), neg = get(paste0("neg_", s)))],
+      price_dt, by = "date"
+    )
+    dt[, signal := pos - neg]
+
+    ggplot(dt, aes(x = date, y = price, fill = signal)) +
+      geom_col(width = bar_width, colour = NA) +
+      scale_fill_gradient2(
+        low      = "#1f77b4",
+        mid      = "grey92",
+        high     = "#d62728",
+        midpoint = 0,
+        limits   = c(-1, 1),
+        name     = "CI signal"
+      ) +
+      scale_x_date(date_labels = "%Y") +
+      labs(x = NULL, y = "Price", title = .scale_label(s)) +
+      theme_bw(base_size = 10) +
+      theme(
+        legend.position   = if (is_bottom) "right" else "none",
+        legend.key.height = unit(1.5, "cm"),
+        axis.text.x       = if (is_bottom) element_text() else element_blank(),
+        axis.ticks.x      = if (is_bottom) element_line() else element_blank(),
+        panel.grid.minor  = element_blank(),
+        plot.title        = element_text(size = 9, face = "bold")
+      )
+  })
+
+  combined <- Reduce(`/`, panels) +
+    plot_layout(heights = rep(1, n_scales))
+
+  if (!is.null(asset_name))
+    combined <- combined +
+      plot_annotation(
+        title = asset_name,
+        theme = theme(plot.title = element_text(face = "bold", size = 12, hjust = 0.5))
+      )
+
+  combined
+}

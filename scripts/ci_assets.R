@@ -24,7 +24,16 @@ ASSETS <- list(
   ivvb11  = list(ticker = "IVVB11.SA", start = start, end = end),
   small11  = list(ticker = "SMAL11.SA", start = start, end = end),
   wege3  = list(ticker = "WEGE3.SA", start = start, end = end),
-  b3sa3  = list(ticker = "B3SA3.SA", start = start, end = end)
+  b3sa3  = list(ticker = "B3SA3.SA", start = start, end = end),
+  ixic  = list(ticker = "^IXIC", start = "1997-1-1", end = "2001-12-31"),
+  bvsp  = list(ticker = "^BVSP", start = start, end = end),
+  rut  = list(ticker = "^RUT", start = start, end = end),
+  oil  = list(ticker = "CL=F", start = start, end = end),
+  silver  = list(ticker = "SL=F", start = start, end = end),
+  btc  = list(ticker = "BTC-USD", start = start, end = end),
+  mxn  = list(ticker = "MXN=X", start = start, end = end),
+  brl  = list(ticker = "BRL=X", start = start, end = end),
+  aud  = list(ticker = "AUDUSD=X", start = start, end = end)
 )
 
 # Number of chunks per asset — increase for very long series (>1000 obs)
@@ -46,9 +55,9 @@ OVERWRITE <- FALSE
 #   )
 CUSTOM_SCALES <- NULL
 CUSTOM_SCALES <- list(
-  short  = list(dt_min = 20L,  dt_max = 60L,  step = 2L),
-  medium = list(dt_min = 60L,  dt_max = 120L, step = 2L),
-  long   = list(dt_min = 120L, dt_max = 250L, step = 2L)
+  short  = list(dt_min = 20L,  dt_max = 60L,  step = 5L),
+  medium = list(dt_min = 60L,  dt_max = 120L, step = 5L),
+  long   = list(dt_min = 120L, dt_max = 250L, step = 5L)
 )
 
 
@@ -151,10 +160,14 @@ for (name in names(ASSETS)) {
 
   # ---- 4. Plot --------------------------------------------------------
   lnp_aligned <- price_dt[date %in% ci_dt$date, log_price]
-  p <- plot_ci_asset(ci_dt,
-                     lnp_series = lnp_aligned,
+  # p <- plot_ci_asset(ci_dt,
+  #                    lnp_series = lnp_aligned,
+  #                    asset_name = toupper(name))
+  p <- plot_ci_price_all(ci_dt,
+                     price_series = exp(lnp_aligned),
+                     dates_price = ci_dt$date,
                      asset_name = toupper(name))
-  plot_path <- file.path(PLOT_DIR, paste0(name, "_ci.pdf"))
+  plot_path <- file.path(PLOT_DIR, paste0(name, "_ci.png"))
   ggsave(plot_path, p, width = 10, height = 7)
   message(sprintf("  Plot saved → %s", plot_path))
 
